@@ -7,6 +7,14 @@
 
 using std::string;
 
+int ProcessTrackOutputJaccard(
+		  const BoundingBox& bbox_gt, BoundingBox* bbox_estimate,
+		  FILE* output_file_ptr);
+
+double getJaccardCoefficient(double leftCol, double topRow, double rightCol, double bottomRow,
+		double gtLeftCol, double gtTopRow, double gtRightCol, double gtBottomRow);
+
+
 TrackerManager::TrackerManager(const std::vector<Video>& videos,
                                RegressorBase* regressor, Tracker* tracker) :
   videos_(videos),
@@ -21,6 +29,8 @@ void TrackerManager::TrackAll() {
 
 void TrackerManager::TrackAll(const size_t start_video_num, const int pause_val) {
   // Iterate over all videos and track the target object in each.
+	FILE* output_file_ptr = fopen("/home/thomas/following-the-leader/GOTURN/result/result.txt", "w");
+
   for (size_t video_num = start_video_num; video_num < videos_.size(); ++video_num) {
     // Get the video.
     const Video& video = videos_[video_num];
@@ -37,6 +47,10 @@ void TrackerManager::TrackAll(const size_t start_video_num, const int pause_val)
     // Initialize the tracker.
     tracker_->Init(image_curr, bbox_gt, regressor_);
 
+    BoundingBox bbox_estimate_uncentered;
+
+    int loss = false;
+    double jaccard = 0.0;
     // Iterate over the remaining frames of the video.
     for (size_t frame_num = first_frame + 1; frame_num < video.all_frames.size(); ++frame_num) {
 
@@ -56,12 +70,16 @@ void TrackerManager::TrackAll(const size_t start_video_num, const int pause_val)
 
       // Track and estimate the target's bounding box location in the current image.
       // Important: this method cannot receive bbox_gt (the ground-truth bounding box) as an input.
-      BoundingBox bbox_estimate_uncentered;
-      tracker_->Track(image_curr, regressor_, &bbox_estimate_uncentered);
+      tracker_->Track(image_curr, regressor_, &bbox_estimate_uncentered, loss);
 
       // Process the output (e.g. visualize / save results).
       ProcessTrackOutput(frame_num, image_curr, has_annotation, bbox_gt,
                            bbox_estimate_uncentered, pause_val);
+
+      //calculate jaccard and print outputfile
+      loss = ProcessTrackOutputJaccard(bbox_gt, &bbox_estimate_uncentered, output_file_ptr);
+
+
     }
     PostProcessVideo();
   }
@@ -101,6 +119,90 @@ void TrackerVisualizer::ProcessTrackOutput(
 void TrackerVisualizer::VideoInit(const Video& video, const size_t video_num) {
   printf("Video: %zu\n", video_num);
 }
+
+double
+getJaccardCoefficient(double leftCol, double topRow, double rightCol, double bottomRow,
+		double gtLeftCol, double gtTopRow, double gtRightCol, double gtBottomRow)
+{
+	double jaccCoeff = 0.;
+
+	if (!(leftCol > gtRightCol ||
+			rightCol < gtLeftCol ||
+			topRow > gtBottomRow ||
+			bottomRow < gtTopRow)
+	)
+	{
+		double interLeftCol = std::max<double>(leftCol, gtLeftCol);
+		double interTopRow = std::max<double>(topRow, gtTopRow);
+		double interRightCol = std::min<double>(rightCol, gtRightCol);
+		double interBottomRow = std::min<double>(bottomRow, gtBottomRow);
+
+		const double areaIntersection = (abs(interRightCol - interLeftCol) + 1) * (abs(interBottomRow - interTopRow) + 1);
+		const double lhRoiSize = (abs(rightCol - leftCol) + 1) * (abs(bottomRow - topRow) + 1);
+		const double rhRoiSize = (abs(gtRightCol - gtLeftCol) + 1) * (abs(gtBottomRow - gtTopRow) + 1);
+
+		jaccCoeff = areaIntersection / (lhRoiSize + rhRoiSize - areaIntersection);
+	}
+	return jaccCoeff;
+}
+
+
+
+int ProcessTrackOutputJaccard(
+    const BoundingBox& bbox_gt, BoundingBox* bbox_estimate,
+    FILE* output_file_ptr) {
+
+	int loss = 0;
+
+  // Stop the timer and print the time needed for tracking.
+//  hrt_.stop();
+//  const double ms = hrt_.getMilliseconds();
+
+  // Update the total time needed for tracking.  (Other time is used to save the tracking
+  // output to a video and to write tracking data to a file for evaluation purposes).
+//  total_ms_ += ms;
+//  num_frames_++;
+
+  // Get the tracking output.
+  double width = fabs(bbox_estimate->get_width());
+  double height = fabs(bbox_estimate->get_height());
+  double x_min = std::min(bbox_estimate->x1_, bbox_estimate->x2_);
+  double y_min = std::min(bbox_estimate->y1_, bbox_estimate->y2_);
+
+  double width_gt = fabs(bbox_gt.get_width());
+  double height_gt = fabs(bbox_gt.get_height());
+  double x_min_gt = std::min(bbox_gt.x1_, bbox_gt.x2_);
+  double y_min_gt = std::min(bbox_gt.y1_, bbox_gt.y2_);
+
+  double l = x_min;
+  double t = y_min;
+  double r = x_min + width;
+  double b = y_min + height;
+
+  double l_gt = x_min_gt;
+  double t_gt = y_min_gt;
+  double r_gt = x_min_gt + width_gt;
+  double b_gt = y_min_gt + height_gt;
+
+  double jaccard = getJaccardCoefficient(l, t, r, b, l_gt, t_gt, r_gt, b_gt);
+
+
+  if (jaccard < 0.01)
+  {
+	  *bbox_estimate = bbox_gt;
+	  loss = 1;
+  }
+  else
+  {
+	  loss = 0;
+  }
+
+  // Save the tracking output to a file
+  fprintf(output_file_ptr, "%.2lf,%.2lf,%.2lf,%.2lf,%.2lf,%d\n", x_min, y_min, width,
+            height,jaccard,loss);
+
+  return loss;
+  }
 
 TrackerTesterAlov::TrackerTesterAlov(const std::vector<Video>& videos,
                                      const bool save_videos,

@@ -38,7 +38,7 @@ LoaderVOT::LoaderVOT(const std::string& vot_folder)
     find_matching_files(video_path, image_filter, &video.all_frames);
 
     // Open the annotation file.
-    const string& bbox_groundtruth_path = video_path + "/groundtruth.txt";
+    const string& bbox_groundtruth_path = video_path + "/groundtruth_8.txt";
     FILE* bbox_groundtruth_file_ptr = fopen(bbox_groundtruth_path.c_str(), "r");
     int frame_num = 0;
     double Ax, Ay, Bx, By, Cx, Cy, Dx, Dy;

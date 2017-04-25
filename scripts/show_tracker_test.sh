@@ -21,3 +21,4 @@ DEPLOY=nets/tracker.prototxt
 CAFFE_MODEL=nets/models/pretrained_model/tracker.caffemodel
 
 build/show_tracker_vot $DEPLOY $CAFFE_MODEL $VIDEOS_FOLDER $GPU_ID $START_VIDEO_NUM $PAUSE_VAL
+#r nets/tracker.prototxt nets/models/pretrained_model/tracker.caffemodel /dados/dissertacao/vot2015/ 0 0 1

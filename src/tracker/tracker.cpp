@@ -41,8 +41,17 @@ void Tracker::Init(const std::string& image_curr_path, const VOTRegion& region,
 }
 
 void Tracker::Track(const cv::Mat& image_curr, RegressorBase* regressor,
-                    BoundingBox* bbox_estimate_uncentered) {
+                    BoundingBox* bbox_estimate_uncentered, int loss) {
   // Get target from previous image.
+	if (loss)
+	{
+		// Save the current estimate as the location of the target.
+		bbox_prev_tight_ = *bbox_estimate_uncentered;
+
+		// Save the current estimate as the prior prediction for the next image.
+		bbox_curr_prior_tight_ = *bbox_estimate_uncentered;
+	}
+
   cv::Mat target_pad;
   CropPadImage(bbox_prev_tight_, image_prev_, &target_pad);
 

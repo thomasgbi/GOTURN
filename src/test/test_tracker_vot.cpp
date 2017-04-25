@@ -57,7 +57,8 @@ int main (int argc, char *argv[]) {
 
       // Track and estimate the bounding box location.
       BoundingBox bbox_estimate;
-      tracker.Track(image, &regressor, &bbox_estimate);
+      int loss = 0;
+      tracker.Track(image, &regressor, &bbox_estimate, loss);
 
       bbox_estimate.GetRegion(&region);
 
